@@ -17,10 +17,11 @@ async function bootstrap() {
     backgroundColor: COLORS.bg,
     parent: "game",
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: 800,
-      height: 600,
+      // RESIZE: canvas preenche o parent (100vw × 100vh). Cenas usam
+      // this.scale.width/height dinamicamente e reagem a resize.
+      mode: Phaser.Scale.RESIZE,
+      width: "100%",
+      height: "100%",
     },
     input: {
       activePointers: 3,

@@ -5,14 +5,11 @@ import { takeScreenshot } from "../screenshot";
 import { playTone, unlockAudio } from "../audio";
 import { isTouchDevice } from "../input";
 
-const WIDTH = 800;
-const HEIGHT = 600;
-
-const SHIP_ROTATION_SPEED = 4.2;  // rad/s
-const SHIP_THRUST = 260;          // px/s²
-const SHIP_MAX_SPEED = 340;       // px/s
-const SHIP_FRICTION = 0.992;      // por frame (60fps ≈ 0.39/s decay)
-const BULLET_SPEED = 520;         // px/s
+const SHIP_ROTATION_SPEED = 4.2;
+const SHIP_THRUST = 260;
+const SHIP_MAX_SPEED = 340;
+const SHIP_FRICTION = 0.992;
+const BULLET_SPEED = 520;
 const BULLET_LIFETIME_MS = 1100;
 const FIRE_COOLDOWN_MS = 230;
 
@@ -46,10 +43,13 @@ interface Bullet {
 }
 
 export class GameScene extends Phaser.Scene {
+  private bg!: Phaser.GameObjects.Rectangle;
+  private scanlines!: Phaser.GameObjects.Graphics;
+
   private ship!: Phaser.GameObjects.Polygon;
   private shipVx = 0;
   private shipVy = 0;
-  private shipRotation = -Math.PI / 2; // aponta pra cima
+  private shipRotation = -Math.PI / 2;
   private shipAlive = true;
   private respawnInvulnUntil = 0;
 
@@ -64,6 +64,9 @@ export class GameScene extends Phaser.Scene {
   private scoreLabel!: Phaser.GameObjects.Text;
   private livesLabel!: Phaser.GameObjects.Text;
   private waveLabel!: Phaser.GameObjects.Text;
+  private bottomLeftLabel!: Phaser.GameObjects.Text;
+  private bottomRightLabel!: Phaser.GameObjects.Text;
+  private dot!: { dot: Phaser.GameObjects.Arc; glow: Phaser.GameObjects.Arc };
 
   private particles!: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -72,7 +75,6 @@ export class GameScene extends Phaser.Scene {
     Phaser.Input.Keyboard.Key
   >;
 
-  // Touch input state
   private touchRotateActive = false;
   private touchRotateOrigin = { x: 0, y: 0 };
   private touchRotateCurrent = { x: 0, y: 0 };
@@ -82,7 +84,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    // Textura procedural pra partículas de explosão
     const g = this.add.graphics();
     g.fillStyle(0xffffff, 1);
     g.fillRect(0, 0, 3, 3);
@@ -91,8 +92,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
-    this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, COLOR_HEX.bg);
-    drawDiagonalScanlines(this, WIDTH, HEIGHT, 18, 0.04);
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    this.bg = this.add.rectangle(W / 2, H / 2, W, H, COLOR_HEX.bg);
+    this.scanlines = drawDiagonalScanlines(this, W, H, 18, 0.04);
 
     this.particles = this.add.particles(0, 0, "particle", {
       speed: { min: 40, max: 220 },
@@ -124,11 +128,28 @@ export class GameScene extends Phaser.Scene {
 
     this.setupTouchControls();
 
-    // Reset state on restart
+    this.scale.on("resize", this.onResize, this);
+
     this.events.on("shutdown", () => {
       this.asteroids = [];
       this.bullets = [];
+      this.scale.off("resize", this.onResize, this);
     });
+  }
+
+  private onResize(gameSize: Phaser.Structs.Size) {
+    const W = gameSize.width;
+    const H = gameSize.height;
+    this.bg.setPosition(W / 2, H / 2).setSize(W, H);
+    this.scanlines.destroy();
+    this.scanlines = drawDiagonalScanlines(this, W, H, 18, 0.04);
+    this.dot.dot.setPosition(W - 22 - 4, 22 + 6);
+    this.dot.glow.setPosition(W - 22 - 4, 22 + 6);
+    this.scoreLabel.setPosition(W / 2, 22);
+    this.waveLabel.setPosition(W - 38, 22);
+    this.livesLabel.setPosition(W - 22, 44);
+    this.bottomLeftLabel.setPosition(22, H - 22);
+    this.bottomRightLabel.setPosition(W - 22, H - 22);
   }
 
   update(time: number, delta: number) {
@@ -159,7 +180,6 @@ export class GameScene extends Phaser.Scene {
       this.refreshChrome();
     }
 
-    // Pisca a nave durante invulnerabilidade pós-respawn
     if (this.shipAlive && time < this.respawnInvulnUntil) {
       const blink = Math.floor((this.respawnInvulnUntil - time) / 120) % 2 === 0;
       this.ship.setAlpha(blink ? 1 : 0.3);
@@ -171,15 +191,17 @@ export class GameScene extends Phaser.Scene {
   // ---------- ship ----------
 
   private spawnShip() {
+    const W = this.scale.width;
+    const H = this.scale.height;
     if (this.ship) this.ship.destroy();
-    const points = [0, -14, -10, 11, 0, 7, 10, 11]; // triângulo com entalhe traseiro
-    this.ship = this.add.polygon(WIDTH / 2, HEIGHT / 2, points, undefined, 0);
+    const points = [0, -14, -10, 11, 0, 7, 10, 11];
+    this.ship = this.add.polygon(W / 2, H / 2, points, undefined, 0);
     this.ship.setStrokeStyle(2, COLOR_HEX.fg, 1);
-    this.ship.setOrigin(0, 0); // pointes já centrados em (0,0)
+    this.ship.setOrigin(0, 0);
     this.shipVx = 0;
     this.shipVy = 0;
     this.shipRotation = -Math.PI / 2;
-    this.ship.setRotation(this.shipRotation + Math.PI / 2); // +π/2 pq triangle aponta -y por default
+    this.ship.setRotation(this.shipRotation + Math.PI / 2);
     this.shipAlive = true;
     this.respawnInvulnUntil = this.time.now + RESPAWN_INVULN_MS;
   }
@@ -190,18 +212,15 @@ export class GameScene extends Phaser.Scene {
     const thrustDown = this.keys.UP.isDown || this.keys.W.isDown;
     const fireDown = this.keys.SPACE.isDown;
 
-    // Rotação (keyboard)
     if (leftDown && !rightDown) this.shipRotation -= SHIP_ROTATION_SPEED * dt;
     else if (rightDown && !leftDown) this.shipRotation += SHIP_ROTATION_SPEED * dt;
 
-    // Rotação (touch — virtual stick)
     if (this.touchRotateActive) {
       const dx = this.touchRotateCurrent.x - this.touchRotateOrigin.x;
       const dy = this.touchRotateCurrent.y - this.touchRotateOrigin.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist > 15) {
         const targetAngle = Math.atan2(dy, dx);
-        // Rotaciona suavemente em direção ao ângulo
         const diff = Phaser.Math.Angle.Wrap(targetAngle - this.shipRotation);
         const rotStep = SHIP_ROTATION_SPEED * dt;
         if (Math.abs(diff) <= rotStep) this.shipRotation = targetAngle;
@@ -211,7 +230,6 @@ export class GameScene extends Phaser.Scene {
 
     this.ship.setRotation(this.shipRotation + Math.PI / 2);
 
-    // Thrust
     const thrusting = thrustDown || (this.touchRotateActive &&
       Math.hypot(
         this.touchRotateCurrent.x - this.touchRotateOrigin.x,
@@ -220,13 +238,11 @@ export class GameScene extends Phaser.Scene {
     if (thrusting) {
       this.shipVx += Math.cos(this.shipRotation) * SHIP_THRUST * dt;
       this.shipVy += Math.sin(this.shipRotation) * SHIP_THRUST * dt;
-      // Particles do thrust (atrás da nave)
       const thrustX = this.ship.x - Math.cos(this.shipRotation) * 12;
       const thrustY = this.ship.y - Math.sin(this.shipRotation) * 12;
       this.particles.emitParticleAt(thrustX, thrustY, 1);
     }
 
-    // Fire
     if (fireDown && time >= this.nextFireAt) {
       this.fireBullet(time);
     }
@@ -234,11 +250,9 @@ export class GameScene extends Phaser.Scene {
 
   private updateShipMotion(dt: number) {
     if (!this.shipAlive) return;
-    // Friction (deceleração suave por frame ≈ 60fps)
     const frictionFactor = Math.pow(SHIP_FRICTION, dt * 60);
     this.shipVx *= frictionFactor;
     this.shipVy *= frictionFactor;
-    // Cap max speed
     const speed = Math.sqrt(this.shipVx * this.shipVx + this.shipVy * this.shipVy);
     if (speed > SHIP_MAX_SPEED) {
       const k = SHIP_MAX_SPEED / speed;
@@ -253,13 +267,14 @@ export class GameScene extends Phaser.Scene {
   // ---------- asteroids ----------
 
   private spawnWave(wave: number) {
+    const W = this.scale.width;
+    const H = this.scale.height;
     const count = 3 + wave;
     for (let i = 0; i < count; i++) {
-      // Spawn em borda aleatória, longe da nave
       let x: number, y: number;
       do {
-        x = Phaser.Math.Between(0, WIDTH);
-        y = Phaser.Math.Between(0, HEIGHT);
+        x = Phaser.Math.Between(0, W);
+        y = Phaser.Math.Between(0, H);
       } while (Math.hypot(x - this.ship.x, y - this.ship.y) < 140);
       const speedMult = 1 + (wave - 1) * 0.12;
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
@@ -294,7 +309,6 @@ export class GameScene extends Phaser.Scene {
     for (const a of this.asteroids) {
       a.poly.x += a.vx * dt;
       a.poly.y += a.vy * dt;
-      // rotação visual leve pra parecer girando
       a.poly.rotation += dt * (a.vx + a.vy) * 0.002;
       this.wrapPosition(a.poly);
     }
@@ -303,9 +317,9 @@ export class GameScene extends Phaser.Scene {
   // ---------- bullets ----------
 
   private fireBullet(time: number) {
-    const nose_x = this.ship.x + Math.cos(this.shipRotation) * 14;
-    const nose_y = this.ship.y + Math.sin(this.shipRotation) * 14;
-    const rect = this.add.rectangle(nose_x, nose_y, 4, 4, COLOR_HEX.accent);
+    const noseX = this.ship.x + Math.cos(this.shipRotation) * 14;
+    const noseY = this.ship.y + Math.sin(this.shipRotation) * 14;
+    const rect = this.add.rectangle(noseX, noseY, 4, 4, COLOR_HEX.accent);
     this.bullets.push({
       rect,
       vx: this.shipVx + Math.cos(this.shipRotation) * BULLET_SPEED,
@@ -337,7 +351,7 @@ export class GameScene extends Phaser.Scene {
   private checkBulletAsteroidCollisions() {
     const survivingBullets: Bullet[] = [];
     const newAsteroids: Asteroid[] = [];
-    let asteroidsHit = new Set<number>();
+    const asteroidsHit = new Set<number>();
 
     for (const b of this.bullets) {
       let hit = false;
@@ -347,7 +361,6 @@ export class GameScene extends Phaser.Scene {
         const dx = b.rect.x - a.poly.x;
         const dy = b.rect.y - a.poly.y;
         if (dx * dx + dy * dy < a.radius * a.radius) {
-          // hit
           hit = true;
           asteroidsHit.add(i);
           this.particles.emitParticleAt(a.poly.x, a.poly.y, 14);
@@ -368,28 +381,20 @@ export class GameScene extends Phaser.Scene {
           break;
         }
       }
-      if (hit) {
-        b.rect.destroy();
-      } else {
-        survivingBullets.push(b);
-      }
+      if (hit) b.rect.destroy();
+      else survivingBullets.push(b);
     }
     this.bullets = survivingBullets;
-    // Remove asteroides destruídos + adiciona filhotes
     const remainingAsteroids: Asteroid[] = [];
     for (let i = 0; i < this.asteroids.length; i++) {
-      if (asteroidsHit.has(i)) {
-        this.asteroids[i].poly.destroy();
-      } else {
-        remainingAsteroids.push(this.asteroids[i]);
-      }
+      if (asteroidsHit.has(i)) this.asteroids[i].poly.destroy();
+      else remainingAsteroids.push(this.asteroids[i]);
     }
     this.asteroids = remainingAsteroids.concat(newAsteroids);
   }
 
   private spawnChildren(parent: Asteroid, childSize: AsteroidSize, into: Asteroid[]) {
     for (let i = 0; i < 2; i++) {
-      // velocidade do filhote: herda + variação angular
       const baseAngle = Math.atan2(parent.vy, parent.vx);
       const angle = baseAngle + Phaser.Math.FloatBetween(-Math.PI / 2.5, Math.PI / 2.5);
       const baseSpeed = Math.hypot(parent.vx, parent.vy);
@@ -439,32 +444,36 @@ export class GameScene extends Phaser.Scene {
   // ---------- helpers ----------
 
   private wrapPosition(obj: Phaser.GameObjects.GameObject & { x: number; y: number }) {
-    if (obj.x < -20) obj.x = WIDTH + 20;
-    else if (obj.x > WIDTH + 20) obj.x = -20;
-    if (obj.y < -20) obj.y = HEIGHT + 20;
-    else if (obj.y > HEIGHT + 20) obj.y = -20;
+    const W = this.scale.width;
+    const H = this.scale.height;
+    if (obj.x < -20) obj.x = W + 20;
+    else if (obj.x > W + 20) obj.x = -20;
+    if (obj.y < -20) obj.y = H + 20;
+    else if (obj.y > H + 20) obj.y = -20;
   }
 
   private drawChrome() {
+    const W = this.scale.width;
+    const H = this.scale.height;
     addCornerLabel(this, 22, 22, "/ 05", "ASTEROIDS", false);
-    createPulsingDot(this, WIDTH - 22 - 4, 22 + 6, 4, COLOR_HEX.accent);
+    this.dot = createPulsingDot(this, W - 22 - 4, 22 + 6, 4, COLOR_HEX.accent);
 
     this.scoreLabel = this.add
-      .text(WIDTH / 2, 22, "", { ...TEXT_PRESETS.monoLabelFg, fontSize: "16px" })
+      .text(W / 2, 22, "", { ...TEXT_PRESETS.monoLabelFg, fontSize: "16px" })
       .setOrigin(0.5, 0);
 
     this.waveLabel = this.add
-      .text(WIDTH - 38, 22, "", TEXT_PRESETS.monoLabel)
+      .text(W - 38, 22, "", TEXT_PRESETS.monoLabel)
       .setOrigin(1, 0);
 
     this.livesLabel = this.add
-      .text(WIDTH - 22, 44, "", TEXT_PRESETS.hint)
+      .text(W - 22, 44, "", TEXT_PRESETS.hint)
       .setOrigin(1, 0);
 
-    this.add.text(22, HEIGHT - 22, "GAMEDEV.05", TEXT_PRESETS.hint).setOrigin(0, 1);
-    this.add.text(WIDTH - 22, HEIGHT - 22, isTouchDevice()
-      ? "ARRASTE ESQ · TOQUE DIR PRA ATIRAR · ESC MENU"
-      : "← → ↑ ESPAÇO · ESC MENU · K SCREENSHOT", TEXT_PRESETS.hint).setOrigin(1, 1);
+    this.bottomLeftLabel = this.add.text(22, H - 22, "GAMEDEV.05", TEXT_PRESETS.hint).setOrigin(0, 1);
+    this.bottomRightLabel = this.add.text(W - 22, H - 22, isTouchDevice()
+      ? "ARRASTE ESQ · TOQUE DIR · ESC MENU"
+      : "← → ↑ ESPAÇO · ESC MENU · K", TEXT_PRESETS.hint).setOrigin(1, 1);
 
     this.refreshChrome();
   }
@@ -476,18 +485,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupTouchControls() {
-    // Touch zones:
-    //   Esq metade do canvas → virtual stick (rotação + thrust se distance > deadzone)
-    //   Dir metade do canvas → tap pra atirar
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.x < WIDTH / 2) {
+      const W = this.scale.width;
+      if (pointer.x < W / 2) {
         this.touchRotateActive = true;
         this.touchRotateOrigin.x = pointer.x;
         this.touchRotateOrigin.y = pointer.y;
         this.touchRotateCurrent.x = pointer.x;
         this.touchRotateCurrent.y = pointer.y;
       } else {
-        // Right half = fire
         const now = this.time.now;
         if (now >= this.nextFireAt && this.shipAlive) {
           this.fireBullet(now);
@@ -495,13 +501,15 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (this.touchRotateActive && pointer.isDown && pointer.x < WIDTH / 2 + 50) {
+      const W = this.scale.width;
+      if (this.touchRotateActive && pointer.isDown && pointer.x < W / 2 + 50) {
         this.touchRotateCurrent.x = pointer.x;
         this.touchRotateCurrent.y = pointer.y;
       }
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.x < WIDTH / 2 + 50) {
+      const W = this.scale.width;
+      if (pointer.x < W / 2 + 50) {
         this.touchRotateActive = false;
       }
     });
