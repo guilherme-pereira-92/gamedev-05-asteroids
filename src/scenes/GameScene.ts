@@ -261,7 +261,19 @@ export class GameScene extends Phaser.Scene {
     }
     this.ship.x += this.shipVx * dt;
     this.ship.y += this.shipVy * dt;
-    this.wrapPosition(this.ship);
+    this.clampShipToBounds();
+  }
+
+  // Nave para na borda — não atravessa a tela.
+  // Zera velocidade no eixo de colisão pra não "grudar" empurrando.
+  private clampShipToBounds() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const m = 14; // margem do nariz da nave
+    if (this.ship.x < m) { this.ship.x = m; if (this.shipVx < 0) this.shipVx = 0; }
+    else if (this.ship.x > W - m) { this.ship.x = W - m; if (this.shipVx > 0) this.shipVx = 0; }
+    if (this.ship.y < m) { this.ship.y = m; if (this.shipVy < 0) this.shipVy = 0; }
+    else if (this.ship.y > H - m) { this.ship.y = H - m; if (this.shipVy > 0) this.shipVy = 0; }
   }
 
   // ---------- asteroids ----------
@@ -340,7 +352,13 @@ export class GameScene extends Phaser.Scene {
       }
       b.rect.x += b.vx * dt;
       b.rect.y += b.vy * dt;
-      this.wrapPosition(b.rect);
+      // Tiro some ao sair da tela (espaço infinito, não wrap).
+      const W = this.scale.width;
+      const H = this.scale.height;
+      if (b.rect.x < -8 || b.rect.x > W + 8 || b.rect.y < -8 || b.rect.y > H + 8) {
+        b.rect.destroy();
+        continue;
+      }
       remaining.push(b);
     }
     this.bullets = remaining;
