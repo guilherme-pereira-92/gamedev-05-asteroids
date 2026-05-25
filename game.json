@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "number": 5,
+  "slug": "05-asteroids",
+  "title": "Asteroids",
+  "shortDescription": "Naves, vetores 2D, inércia e wrap — arcade clássico de Atari.",
+  "stack": ["TypeScript", "Phaser 3", "Vite"],
+  "concepts": [
+    "vetores 2D + rotação 360°",
+    "inércia + fricção (cinemática realista)",
+    "wrap around nas bordas",
+    "múltiplas cenas separadas (Menu/Game/GameOver)",
+    "scene.start com data passing",
+    "polígonos irregulares (makeAsteroidPoints)",
+    "asteroids quebrando (large → medium → small)",
+    "bullets com lifetime + cooldown",
+    "wave system progressivo",
+    "particle emitter com tint"
+  ],
+  "publishedAt": "2026-05-24",
+  "live": "https://guilherme-pereira-92.github.io/gamedev-05-asteroids/",
+  "repo": "https://github.com/guilherme-pereira-92/gamedev-05-asteroids",
+  "cover": "screenshots/cover.png",
+  "playable": true,
+  "mobile": "responsive"
+}
